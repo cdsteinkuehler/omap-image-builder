@@ -481,9 +481,9 @@ dd_uboot_boot () {
 		uboot_blob="${UBOOT}"
 	fi
 
-	echo "${uboot_name}: dd if=${uboot_blob} of=${media} ${dd_uboot}"
+	echo "${uboot_name}: dd if=${uboot_blob} of=${dd_uboot_partiton} ${dd_uboot}"
 	echo "-----------------------------"
-	dd if=${TEMPDIR}/dl/${uboot_blob} of=${media} ${dd_uboot}
+	dd if=${TEMPDIR}/dl/${uboot_blob} of=${dd_uboot_partiton} ${dd_uboot}
 	echo "-----------------------------"
 }
 
@@ -628,6 +628,9 @@ create_partitions () {
 	unset bootloader_installed
 	unset sfdisk_gpt
 
+	#default destination for dd_spl_uboot_boot and dd_uboot_boot
+	dd_uboot_partiton="${media}"
+
 	media_boot_partition=1
 	media_rootfs_partition=2
 
@@ -685,6 +688,15 @@ create_partitions () {
 			media_rootfs_partition=1
 		fi
 		;;
+	raw_partition)
+		echo "will dd bootloader on partiton ${bootloader_ptype}"
+		sfdisk_fstype=${bootloader_ptype}
+		sfdisk_partition_layout
+		dd_uboot_partiton=1
+		media_boot_partition=2
+		media_rootfs_partition=2
+		;;
+
 	*)
 		echo "Using sfdisk to create partition layout"
 		echo "Version: `LC_ALL=C sfdisk --version`"
@@ -725,6 +737,20 @@ create_partitions () {
 	else
 		partprobe ${media}
 	fi
+
+	# delay dd'ing the bootloader until raw partition visible
+	case "${bootloader_location}" in
+        raw_partition)
+		echo "Using dd to place bootloader on partiton ${bootloader_ptype}"
+		dd_uboot_partiton=${media_prefix}${dd_uboot_partiton}
+		dd_uboot_boot
+		bootloader_installed=1
+		;;
+
+	*)
+		;;
+	esac
+
 
 	if [ "x${media_boot_partition}" = "x${media_rootfs_partition}" ] ; then
 		mount_partition_format="${ROOTFS_TYPE}"
